@@ -33,30 +33,6 @@ typedef struct {
     bool player;
 } piece;
 
-void os_init(void);
-
-void draw_initial_board(void);
-
-void draw_square(int8_t, int8_t);
-
-void draw_piece(int8_t, int8_t, unsigned char (*)[4], int8_t);
-
-void draw_piece_at_position(piece *);
-
-void init_game(void);
-
-void perform_action(void);
-
-piece *get_piece_at_position(int8_t, int8_t);
-
-bool is_valid_move_position(void);
-
-bool is_valid_move_pieces(void);
-
-void move_cursor(int8_t, int8_t);
-
-int check_switches(int);
-
 // code from https://github.com/MKLOL/FortunaMultiplayer/blob/master/main.c
 // binary representation of Textures for chess.
 unsigned char rk[BOARD_SQUARE_SIZE][4] = {{255, 255, 255, 255},
@@ -240,7 +216,6 @@ unsigned char hs[BOARD_SQUARE_SIZE][4] = {{255, 255, 255, 255},
                                           {255, 255, 255, 255},
                                           {255, 255, 255, 255}};
 
-position current_cursor_position = {0, 0};
 
 piece pieces[32] = {
         {{0, 0}, 'r', 0},
@@ -277,9 +252,43 @@ piece pieces[32] = {
         {{7, 6}, 'p', 1}
 };
 
+
+void os_init(void);
+
+void draw_initial_board(void);
+
+void draw_square(int8_t, int8_t);
+
+void draw_piece(int8_t, int8_t, unsigned char (*)[4], int8_t);
+
+void draw_piece_at_position(piece *);
+
+void init_game(void);
+
+void perform_action(void);
+
+piece *get_piece_at_position(int8_t, int8_t);
+
+bool check_chess(piece*);
+
+bool check_position_chess(piece*, int8_t, int8_t);
+
+bool check_line_chess(piece*, int8_t, int8_t, int8_t, int8_t);
+
+bool is_valid_move_position(void);
+
+bool is_valid_move_pieces(void);
+
+void move_cursor(int8_t, int8_t);
+
+int check_switches(int);
+
+// false is white and true is black
+bool turn = false;
+
 piece *selected_piece = NULL;
 position previous_selected_position = {-1, -1};
-
+position current_cursor_position = {0, 0};
 
 void main(void) {
 
@@ -367,12 +376,18 @@ void draw_square(int8_t x, int8_t y) {
     sprintf(debug, "pspp: %d %d  ", previous_selected_position.x, previous_selected_position.y);
     display_string_xy(debug, 240, 30);
 
+    if (turn) {
+        display_string_xy("turn: black", 240, 40);
+    } else {
+        display_string_xy("turn: white", 240, 40);
+    }
+
     // position of all pieces debug
-    int i = 0;
+/*    int i = 0;
     for (i = 0; i < 16; i++) {
         sprintf(debug, "%d: %d %d  ", i, pieces[i].pos.x, pieces[i].pos.y);
         display_string_xy(debug, 240, i * 10 + 50);
-    }
+    }*/
 }
 
 // code from https://github.com/MKLOL/FortunaMultiplayer/blob/master/main.c
@@ -436,9 +451,11 @@ void init_game() {
 }
 
 void perform_action() {
+    piece *piece_at;
+
     if (selected_piece == NULL) {
-        piece *piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
-        if (piece_at != NULL) {
+        piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
+        if (piece_at != NULL && piece_at->player == turn) {
             previous_selected_position.x = current_cursor_position.x;
             previous_selected_position.y = current_cursor_position.y;
 
@@ -449,8 +466,21 @@ void perform_action() {
         }
     } else {
         if (is_valid_move_position() && is_valid_move_pieces()) {
+            piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
+
+            if (piece_at != NULL && piece_at->player != selected_piece->player) {
+                piece_at->pos.x = -2;
+                piece_at->pos.y = -2;
+            }
+
             selected_piece->pos.x = current_cursor_position.x;
             selected_piece->pos.y = current_cursor_position.y;
+
+            if(check_chess(selected_piece)){
+                display_string_xy("chess", 240, 50);
+            }
+
+            turn = 1 - turn;
         } else {
             selected_piece->pos.x = previous_selected_position.x;
             selected_piece->pos.y = previous_selected_position.y;
@@ -478,6 +508,105 @@ piece *get_piece_at_position(int8_t x, int8_t y) {
     }
 
     return NULL;
+}
+
+bool check_chess(piece *piece) {
+    int8_t x = piece->pos.x, y = piece->pos.y;
+
+    switch (piece->type) {
+        case 'r':
+            if (check_line_chess(piece, x, y, -1, 0)
+                    || check_line_chess(piece, x, y, 0, -1)
+                    || check_line_chess(piece, x, y, 1, 0)
+                    || check_line_chess(piece, x, y, 0, 1)) {
+                return true;
+            }
+            break;
+        case 'h':
+            if (check_position_chess(piece, x - 1, y - 2)
+                || check_position_chess(piece, x - 1, y + 2)
+                || check_position_chess(piece, x - 2, y - 1)
+                || check_position_chess(piece, x - 2, y + 1)
+                || check_position_chess(piece, x + 1, y - 2)
+                || check_position_chess(piece, x + 1, y + 2)
+                || check_position_chess(piece, x + 2, y - 1)
+                || check_position_chess(piece, x + 2, y + 1)) {
+                return true;
+            }
+            break;
+        case 'b':
+            if (check_line_chess(piece, x, y, -1, -1)
+                || check_line_chess(piece, x, y, -1, 1)
+                || check_line_chess(piece, x, y, 1, -1)
+                || check_line_chess(piece, x, y, 1, 1)) {
+                return true;
+            }
+            break;
+        case 'q':
+            if (check_line_chess(piece, x, y, -1, 0)
+                    || check_line_chess(piece, x, y, 0, -1)
+                    || check_line_chess(piece, x, y, 1, 0)
+                    || check_line_chess(piece, x, y, 0, 1)
+                    || check_line_chess(piece, x, y, -1, -1)
+                    || check_line_chess(piece, x, y, -1, 1)
+                    || check_line_chess(piece, x, y, 1, -1)
+                    || check_line_chess(piece, x, y, 1, 1)) {
+                return true;
+            }
+            break;
+        case 'k':
+            if (check_position_chess(piece, x - 1, y - 1)
+                || check_position_chess(piece, x - 1, y)
+                || check_position_chess(piece, x - 1, y + 1)
+                || check_position_chess(piece, x, y - 1)
+                || check_position_chess(piece, x - 1, y + 1)
+                || check_position_chess(piece, x + 1, y - 1)
+                || check_position_chess(piece, x + 1, y)
+                || check_position_chess(piece, x - 1, y + 1)) {
+                return true;
+            }
+            break;
+        case 'p':
+            if (piece->player == false) {
+                if(check_position_chess(piece, x + 1, y + 1) || check_position_chess(piece, x - 1, y + 1)){
+                    return true;
+                }
+            } else {
+                if(check_position_chess(piece, x + 1, y - 1) || check_position_chess(piece, x - 1, y - 1)){
+                    return true;
+                }
+            }
+            break;
+    }
+
+    return false;
+}
+
+bool check_position_chess(piece *piece_p, int8_t x, int8_t y) {
+    piece *piece_at = get_piece_at_position(x, y);
+    if (piece_at != NULL && piece_at->player != piece_p->player && piece_at->type == 'k') {
+        return true;
+    }
+
+    return false;
+}
+
+bool check_line_chess(piece *piece_p, int8_t x, int8_t y, int8_t step_x, int8_t step_y) {
+    piece *piece_at;
+
+    while (x >= 0 && x < 8 && y >= 0 && y < 8) {
+        piece *piece_at = get_piece_at_position(x, y);
+        if (piece_at != NULL && piece_at->type == 'k') {
+            return true;
+        } else if (piece_at != NULL && piece_at->type != 'k') {
+            break;
+        }
+
+        x += step_x;
+        y += step_y;
+    }
+
+    return false;
 }
 
 
@@ -539,7 +668,6 @@ bool is_valid_move_position() {
 
 // checks if the piece is allowed to move on a particular position from a movement's point of view
 bool is_valid_move_pieces() {
-
     piece *piece_at;
     uint8_t i;
     int8_t min, max;
@@ -554,14 +682,14 @@ bool is_valid_move_pieces() {
                 }
             } else {
                 piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
-                if (piece_at == NULL || piece_at->player == selected_piece->player) {
+                if (piece_at == NULL || piece_at->player == selected_piece->player || piece_at->type == 'k') {
                     return false;
                 }
             }
             break;
         case 'r':
-            if(previous_selected_position.x == current_cursor_position.x){
-                if(previous_selected_position.y <  current_cursor_position.y){
+            if (previous_selected_position.x == current_cursor_position.x) {
+                if (previous_selected_position.y < current_cursor_position.y) {
                     min = previous_selected_position.y;
                     max = current_cursor_position.y;
                 } else {
@@ -569,14 +697,14 @@ bool is_valid_move_pieces() {
                     max = previous_selected_position.y;
                 }
 
-                for(i = min; i < max; i++){
+                for (i = min; i < max; i++) {
                     piece_at = get_piece_at_position(current_cursor_position.x, i);
-                    if(piece_at != NULL){
+                    if (piece_at != NULL) {
                         return false;
                     }
                 }
             } else {
-                if(previous_selected_position.x <  current_cursor_position.x){
+                if (previous_selected_position.x < current_cursor_position.x) {
                     min = previous_selected_position.x;
                     max = current_cursor_position.x;
                 } else {
@@ -584,16 +712,16 @@ bool is_valid_move_pieces() {
                     max = previous_selected_position.x;
                 }
 
-                for(i = min; i < max; i++){
+                for (i = min; i < max; i++) {
                     piece_at = get_piece_at_position(i, current_cursor_position.y);
-                    if(piece_at != NULL){
+                    if (piece_at != NULL) {
                         return false;
                     }
                 }
             }
 
             piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
-            if(piece_at != NULL && piece_at->player == selected_piece->player){
+            if (piece_at != NULL && (piece_at->player == selected_piece->player || piece_at->type == 'k')) {
                 return false;
             }
 
@@ -601,18 +729,18 @@ bool is_valid_move_pieces() {
         case 'h':
         case 'k':
             piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
-            if(piece_at != NULL && piece_at->player == selected_piece->player){
+            if (piece_at != NULL && (piece_at->player == selected_piece->player || piece_at->type == 'k')) {
                 return false;
             }
             break;
         case 'b':
-            if(previous_selected_position.x <  current_cursor_position.x){
+            if (previous_selected_position.x < current_cursor_position.x) {
                 step_x = 1;
             } else {
                 step_x = -1;
             }
 
-            if(previous_selected_position.y <  current_cursor_position.y){
+            if (previous_selected_position.y < current_cursor_position.y) {
                 step_y = 1;
             } else {
                 step_y = -1;
@@ -624,10 +752,10 @@ bool is_valid_move_pieces() {
             maxs = current_cursor_position.y;
 
             i = 0;
-            while(min != max && mins != maxs){
+            while (min != max && mins != maxs) {
 
                 piece_at = get_piece_at_position(min, mins);
-                if(piece_at != NULL){
+                if (piece_at != NULL) {
                     return false;
                 }
                 min = min + step_x;
@@ -635,14 +763,14 @@ bool is_valid_move_pieces() {
             }
 
             piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
-            if(piece_at != NULL && piece_at->player == selected_piece->player){
+            if (piece_at != NULL && (piece_at->player == selected_piece->player || piece_at->type == 'k')) {
                 return false;
             }
 
             break;
         case 'q':
-            if(previous_selected_position.x == current_cursor_position.x){
-                if(previous_selected_position.y <  current_cursor_position.y){
+            if (previous_selected_position.x == current_cursor_position.x) {
+                if (previous_selected_position.y < current_cursor_position.y) {
                     min = previous_selected_position.y;
                     max = current_cursor_position.y;
                 } else {
@@ -650,14 +778,14 @@ bool is_valid_move_pieces() {
                     max = previous_selected_position.y;
                 }
 
-                for(i = min; i < max; i++){
+                for (i = min; i < max; i++) {
                     piece_at = get_piece_at_position(current_cursor_position.x, i);
-                    if(piece_at != NULL){
+                    if (piece_at != NULL) {
                         return false;
                     }
                 }
             } else {
-                if(previous_selected_position.x <  current_cursor_position.x){
+                if (previous_selected_position.x < current_cursor_position.x) {
                     min = previous_selected_position.x;
                     max = current_cursor_position.x;
                 } else {
@@ -665,21 +793,21 @@ bool is_valid_move_pieces() {
                     max = previous_selected_position.x;
                 }
 
-                for(i = min; i < max; i++){
+                for (i = min; i < max; i++) {
                     piece_at = get_piece_at_position(i, current_cursor_position.y);
-                    if(piece_at != NULL){
+                    if (piece_at != NULL) {
                         return false;
                     }
                 }
             }
 
-            if(previous_selected_position.x <  current_cursor_position.x){
+            if (previous_selected_position.x < current_cursor_position.x) {
                 step_x = 1;
             } else {
                 step_x = -1;
             }
 
-            if(previous_selected_position.y <  current_cursor_position.y){
+            if (previous_selected_position.y < current_cursor_position.y) {
                 step_y = 1;
             } else {
                 step_y = -1;
@@ -691,10 +819,10 @@ bool is_valid_move_pieces() {
             maxs = current_cursor_position.y;
 
             i = 0;
-            while(min != max && mins != maxs){
+            while (min != max && mins != maxs) {
 
                 piece_at = get_piece_at_position(min, mins);
-                if(piece_at != NULL){
+                if (piece_at != NULL) {
                     return false;
                 }
                 min = min + step_x;
@@ -702,13 +830,12 @@ bool is_valid_move_pieces() {
             }
 
             piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
-            if(piece_at != NULL && piece_at->player == selected_piece->player){
+            if (piece_at != NULL && (piece_at->player == selected_piece->player || piece_at->type == 'k')) {
                 return false;
             }
 
             break;
     }
-
     return true;
 }
 
