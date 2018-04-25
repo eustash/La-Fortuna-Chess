@@ -269,15 +269,19 @@ void perform_action(void);
 
 piece *get_piece_at_position(int8_t, int8_t);
 
-bool check_chess(piece*);
+bool check_chess_position(piece *, int8_t, int8_t);
 
-bool check_position_chess(piece*, int8_t, int8_t);
+bool check_pawn_chess(piece *, int8_t, int8_t);
 
-bool check_line_chess(piece*, int8_t, int8_t, int8_t, int8_t);
+bool check_line_chess(piece *, int8_t, int8_t, int8_t, int8_t);
+
+bool check_horse_chess(piece *, int8_t, int8_t);
 
 bool is_valid_move_position(void);
 
-bool is_valid_move_pieces(void);
+bool is_valid_move_piece(void);
+
+bool is_king_next_square(bool player, int8_t x, int8_t y);
 
 void move_cursor(int8_t, int8_t);
 
@@ -465,7 +469,7 @@ void perform_action() {
 
         }
     } else {
-        if (is_valid_move_position() && is_valid_move_pieces()) {
+        if (is_valid_move_position() && is_valid_move_piece()) {
             piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
 
             if (piece_at != NULL && piece_at->player != selected_piece->player) {
@@ -476,8 +480,12 @@ void perform_action() {
             selected_piece->pos.x = current_cursor_position.x;
             selected_piece->pos.y = current_cursor_position.y;
 
-            if(check_chess(selected_piece)){
-                display_string_xy("chess", 240, 50);
+            int8_t i = 0;
+            for (i = 0; i < 32; i++) {
+                if (pieces[i].player != selected_piece->player && pieces[i].type == 'k' &&
+                    check_chess_position(&pieces[i], pieces[i].pos.x, pieces[i].pos.y)) {
+                    display_string_xy("chess", 240, 50);
+                }
             }
 
             turn = 1 - turn;
@@ -510,96 +518,76 @@ piece *get_piece_at_position(int8_t x, int8_t y) {
     return NULL;
 }
 
-bool check_chess(piece *piece) {
-    int8_t x = piece->pos.x, y = piece->pos.y;
+bool check_chess_position(piece *king, int8_t x, int8_t y) {
 
-    switch (piece->type) {
-        case 'r':
-            if (check_line_chess(piece, x, y, -1, 0)
-                    || check_line_chess(piece, x, y, 0, -1)
-                    || check_line_chess(piece, x, y, 1, 0)
-                    || check_line_chess(piece, x, y, 0, 1)) {
-                return true;
-            }
-            break;
-        case 'h':
-            if (check_position_chess(piece, x - 1, y - 2)
-                || check_position_chess(piece, x - 1, y + 2)
-                || check_position_chess(piece, x - 2, y - 1)
-                || check_position_chess(piece, x - 2, y + 1)
-                || check_position_chess(piece, x + 1, y - 2)
-                || check_position_chess(piece, x + 1, y + 2)
-                || check_position_chess(piece, x + 2, y - 1)
-                || check_position_chess(piece, x + 2, y + 1)) {
-                return true;
-            }
-            break;
-        case 'b':
-            if (check_line_chess(piece, x, y, -1, -1)
-                || check_line_chess(piece, x, y, -1, 1)
-                || check_line_chess(piece, x, y, 1, -1)
-                || check_line_chess(piece, x, y, 1, 1)) {
-                return true;
-            }
-            break;
-        case 'q':
-            if (check_line_chess(piece, x, y, -1, 0)
-                    || check_line_chess(piece, x, y, 0, -1)
-                    || check_line_chess(piece, x, y, 1, 0)
-                    || check_line_chess(piece, x, y, 0, 1)
-                    || check_line_chess(piece, x, y, -1, -1)
-                    || check_line_chess(piece, x, y, -1, 1)
-                    || check_line_chess(piece, x, y, 1, -1)
-                    || check_line_chess(piece, x, y, 1, 1)) {
-                return true;
-            }
-            break;
-        case 'k':
-            if (check_position_chess(piece, x - 1, y - 1)
-                || check_position_chess(piece, x - 1, y)
-                || check_position_chess(piece, x - 1, y + 1)
-                || check_position_chess(piece, x, y - 1)
-                || check_position_chess(piece, x - 1, y + 1)
-                || check_position_chess(piece, x + 1, y - 1)
-                || check_position_chess(piece, x + 1, y)
-                || check_position_chess(piece, x - 1, y + 1)) {
-                return true;
-            }
-            break;
-        case 'p':
-            if (piece->player == false) {
-                if(check_position_chess(piece, x + 1, y + 1) || check_position_chess(piece, x - 1, y + 1)){
-                    return true;
-                }
-            } else {
-                if(check_position_chess(piece, x + 1, y - 1) || check_position_chess(piece, x - 1, y - 1)){
-                    return true;
-                }
-            }
-            break;
+    if (king == NULL) {
+        return false;
     }
 
-    return false;
-}
+    // pawn
+    if (king->player == false && (check_pawn_chess(king, x - 1, y + 1) || check_pawn_chess(king, x + 1, y + 1))) {
+        return true;
+    } else if (king->player == true && (check_pawn_chess(king, x - 1, y - 1) || check_pawn_chess(king, x + 1, y - 1))) {
+        return true;
+    }
 
-bool check_position_chess(piece *piece_p, int8_t x, int8_t y) {
-    piece *piece_at = get_piece_at_position(x, y);
-    if (piece_at != NULL && piece_at->player != piece_p->player && piece_at->type == 'k') {
+    // rook && queen
+    if (check_line_chess(king, x, y, 0, -1)
+        || check_line_chess(king, x, y, 0, 1)
+        || check_line_chess(king, x, y, -1, 0)
+        || check_line_chess(king, x, y, 1, 0)) {
+        return true;
+    }
+
+    // horse
+    if (check_horse_chess(king, x - 1, y - 2)
+        || check_horse_chess(king, x - 1, y + 2)
+        || check_horse_chess(king, x - 2, y - 1)
+        || check_horse_chess(king, x - 2, y + 1)
+        || check_horse_chess(king, x + 1, y - 2)
+        || check_horse_chess(king, x + 1, y + 2)
+        || check_horse_chess(king, x + 2, y - 1)
+        || check_horse_chess(king, x + 2, y + 1)) {
+        return true;
+    }
+
+    // bishop && queen
+    if (check_line_chess(king, x, y, -1, -1)
+        || check_line_chess(king, x, y, -1, 1)
+        || check_line_chess(king, x, y, 1, -1)
+        || check_line_chess(king, x, y, 1, 1)) {
         return true;
     }
 
     return false;
 }
 
-bool check_line_chess(piece *piece_p, int8_t x, int8_t y, int8_t step_x, int8_t step_y) {
+bool check_pawn_chess(piece *king, int8_t x, int8_t y) {
+    piece *piece_at = get_piece_at_position(x, y);
+    if (piece_at != NULL && piece_at->player != king->player && piece_at->type == 'p') {
+        return true;
+    }
+
+    return false;
+}
+
+bool check_line_chess(piece *king, int8_t x, int8_t y, int8_t step_x, int8_t step_y) {
     piece *piece_at;
 
     while (x >= 0 && x < 8 && y >= 0 && y < 8) {
-        piece *piece_at = get_piece_at_position(x, y);
-        if (piece_at != NULL && piece_at->type == 'k') {
+        piece_at = get_piece_at_position(x, y);
+
+        if (piece_at != NULL && piece_at->player != king->player && piece_at->type == 'q') {
             return true;
-        } else if (piece_at != NULL && piece_at->type != 'k') {
-            break;
+        } else if (piece_at != NULL && piece_at->type == 'r' && piece_at->player != king->player &&
+                   (step_x == 0 || step_y == 0)) {
+            return true;
+        } else if (piece_at != NULL && piece_at->type == 'b' && piece_at->player != king->player && step_x != 0 &&
+                   step_y != 0) {
+            return true;
+        } else if (piece_at != NULL &&
+                   (piece_at->player == king->player || (piece_at->type != 'r' && piece_at->type != 'b'))) {
+            return false;
         }
 
         x += step_x;
@@ -608,6 +596,18 @@ bool check_line_chess(piece *piece_p, int8_t x, int8_t y, int8_t step_x, int8_t 
 
     return false;
 }
+
+bool check_horse_chess(piece *king, int8_t x, int8_t y) {
+    piece *piece_at = get_piece_at_position(x, y);
+    if (piece_at != NULL && piece_at->player != king->player && piece_at->type == 'h') {
+        return true;
+    }
+
+    return false;
+}
+
+// find a way to not allow the kings to go more than 2 pieces one to each other
+
 
 
 // check if the piece is allowed to go on that position from a movement's point of view
@@ -667,91 +667,92 @@ bool is_valid_move_position() {
 }
 
 // checks if the piece is allowed to move on a particular position from a movement's point of view
-bool is_valid_move_pieces() {
+bool is_valid_move_piece() {
     piece *piece_at;
     uint8_t i;
     int8_t min, max;
     int8_t mins, maxs;
     int8_t step_x, step_y;
+    int8_t x = current_cursor_position.x, y = current_cursor_position.y;
     switch (selected_piece->type) {
         case 'p':
-            if (previous_selected_position.x == current_cursor_position.x) {
-                piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
+            if (previous_selected_position.x == x) {
+                piece_at = get_piece_at_position(x, y);
                 if (piece_at != NULL) {
                     return false;
                 }
             } else {
-                piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
+                piece_at = get_piece_at_position(x, y);
                 if (piece_at == NULL || piece_at->player == selected_piece->player || piece_at->type == 'k') {
                     return false;
                 }
             }
             break;
         case 'r':
-            if (previous_selected_position.x == current_cursor_position.x) {
-                if (previous_selected_position.y < current_cursor_position.y) {
-                    min = previous_selected_position.y;
-                    max = current_cursor_position.y;
+            if (previous_selected_position.x == x) {
+                if (previous_selected_position.y < y) {
+                    step_y = 1;
                 } else {
-                    min = current_cursor_position.y;
-                    max = previous_selected_position.y;
+                    step_y = -1;
                 }
 
-                for (i = min; i < max; i++) {
-                    piece_at = get_piece_at_position(current_cursor_position.x, i);
+
+                i = previous_selected_position.y;
+                while (i != y) {
+                    piece_at = get_piece_at_position(x, i);
                     if (piece_at != NULL) {
                         return false;
                     }
+                    i += step_y;
                 }
+
             } else {
-                if (previous_selected_position.x < current_cursor_position.x) {
-                    min = previous_selected_position.x;
-                    max = current_cursor_position.x;
+                if (previous_selected_position.x < x) {
+                    step_x = 1;
                 } else {
-                    min = current_cursor_position.x;
-                    max = previous_selected_position.x;
+                    step_x = -1;
                 }
 
-                for (i = min; i < max; i++) {
-                    piece_at = get_piece_at_position(i, current_cursor_position.y);
+                i = previous_selected_position.x;
+                while (i != x) {
+                    piece_at = get_piece_at_position(i, y);
                     if (piece_at != NULL) {
                         return false;
                     }
+                    i += step_x;
                 }
             }
 
-            piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
+            piece_at = get_piece_at_position(x, y);
             if (piece_at != NULL && (piece_at->player == selected_piece->player || piece_at->type == 'k')) {
                 return false;
             }
 
             break;
         case 'h':
-        case 'k':
-            piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
+            piece_at = get_piece_at_position(x, y);
             if (piece_at != NULL && (piece_at->player == selected_piece->player || piece_at->type == 'k')) {
                 return false;
             }
             break;
         case 'b':
-            if (previous_selected_position.x < current_cursor_position.x) {
+            if (previous_selected_position.x < x) {
                 step_x = 1;
             } else {
                 step_x = -1;
             }
 
-            if (previous_selected_position.y < current_cursor_position.y) {
+            if (previous_selected_position.y < y) {
                 step_y = 1;
             } else {
                 step_y = -1;
             }
 
             min = previous_selected_position.x;
-            max = current_cursor_position.x;
+            max = x;
             mins = previous_selected_position.y;
-            maxs = current_cursor_position.y;
+            maxs = y;
 
-            i = 0;
             while (min != max && mins != maxs) {
 
                 piece_at = get_piece_at_position(min, mins);
@@ -762,63 +763,64 @@ bool is_valid_move_pieces() {
                 mins = mins + step_y;
             }
 
-            piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
+            piece_at = get_piece_at_position(x, y);
             if (piece_at != NULL && (piece_at->player == selected_piece->player || piece_at->type == 'k')) {
                 return false;
             }
 
             break;
         case 'q':
-            if (previous_selected_position.x == current_cursor_position.x) {
-                if (previous_selected_position.y < current_cursor_position.y) {
-                    min = previous_selected_position.y;
-                    max = current_cursor_position.y;
+            if (previous_selected_position.x == x) {
+                if (previous_selected_position.y < y) {
+                    step_y = 1;
                 } else {
-                    min = current_cursor_position.y;
-                    max = previous_selected_position.y;
+                    step_y = -1;
                 }
 
-                for (i = min; i < max; i++) {
-                    piece_at = get_piece_at_position(current_cursor_position.x, i);
+
+                i = previous_selected_position.y;
+                while (i != y) {
+                    piece_at = get_piece_at_position(x, i);
                     if (piece_at != NULL) {
                         return false;
                     }
-                }
-            } else {
-                if (previous_selected_position.x < current_cursor_position.x) {
-                    min = previous_selected_position.x;
-                    max = current_cursor_position.x;
-                } else {
-                    min = current_cursor_position.x;
-                    max = previous_selected_position.x;
+                    i += step_y;
                 }
 
-                for (i = min; i < max; i++) {
-                    piece_at = get_piece_at_position(i, current_cursor_position.y);
+            } else if (previous_selected_position.y == y) {
+                if (previous_selected_position.x < x) {
+                    step_x = 1;
+                } else {
+                    step_x = -1;
+                }
+
+                i = previous_selected_position.x;
+                while (i != x) {
+                    piece_at = get_piece_at_position(i, y);
                     if (piece_at != NULL) {
                         return false;
                     }
+                    i += step_x;
                 }
             }
 
-            if (previous_selected_position.x < current_cursor_position.x) {
+            if (previous_selected_position.x < x) {
                 step_x = 1;
             } else {
                 step_x = -1;
             }
 
-            if (previous_selected_position.y < current_cursor_position.y) {
+            if (previous_selected_position.y < y) {
                 step_y = 1;
             } else {
                 step_y = -1;
             }
 
             min = previous_selected_position.x;
-            max = current_cursor_position.x;
+            max = x;
             mins = previous_selected_position.y;
-            maxs = current_cursor_position.y;
+            maxs = y;
 
-            i = 0;
             while (min != max && mins != maxs) {
 
                 piece_at = get_piece_at_position(min, mins);
@@ -829,14 +831,38 @@ bool is_valid_move_pieces() {
                 mins = mins + step_y;
             }
 
-            piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
+            piece_at = get_piece_at_position(x, y);
             if (piece_at != NULL && (piece_at->player == selected_piece->player || piece_at->type == 'k')) {
                 return false;
             }
-
+            break;
+        case 'k':
+            piece_at = get_piece_at_position(x, y);
+            if (piece_at != NULL && piece_at->player == selected_piece->player) {
+                return false;
+            } else if (check_chess_position(selected_piece, x, y)) {
+                return false;
+            } else if (is_king_next_square(selected_piece->player, x - 1, y - 1)
+                       || is_king_next_square(selected_piece->player, x, y - 1)
+                       || is_king_next_square(selected_piece->player, x + 1, y - 1)
+                       || is_king_next_square(selected_piece->player, x - 1, y)
+                       || is_king_next_square(selected_piece->player, x - 1, y + 1)
+                       || is_king_next_square(selected_piece->player, x + 1, y - 1)
+                       || is_king_next_square(selected_piece->player, x + 1, y)
+                       || is_king_next_square(selected_piece->player, x - 1, y + 1)) {
+                return false;
+            }
             break;
     }
     return true;
+}
+
+bool is_king_next_square(bool player, int8_t x, int8_t y) {
+    piece *piece_at = get_piece_at_position(x, y);
+    if (piece_at != NULL && piece_at->player != player && piece_at->type == 'k') {
+        return true;
+    }
+    return false;
 }
 
 
