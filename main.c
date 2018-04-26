@@ -1,6 +1,7 @@
 /* COMP2215 Task 7*/
 
 #include <stdlib.h>
+#include <stdio.h>
 #include "lcd.h"
 #include "ruota.h"
 #include "rios.h"
@@ -267,21 +268,25 @@ void init_game(void);
 
 void perform_action(void);
 
+void debug_king_chess(void);
+
 piece *get_piece_at_position(int8_t, int8_t);
 
-bool check_chess_position(piece *, int8_t, int8_t);
+bool check_chess_position(bool, int8_t, int8_t);
 
-bool check_pawn_chess(piece *, int8_t, int8_t);
+bool check_pawn_chess(bool, int8_t, int8_t);
 
-bool check_line_chess(piece *, int8_t, int8_t, int8_t, int8_t);
+bool check_line_chess(bool, int8_t, int8_t, int8_t, int8_t);
 
-bool check_horse_chess(piece *, int8_t, int8_t);
+bool check_horse_chess(bool, int8_t, int8_t);
 
 bool is_valid_move_position(void);
 
 bool is_valid_move_piece(void);
 
 bool is_king_next_square(bool player, int8_t x, int8_t y);
+
+piece* get_king(bool player);
 
 void move_cursor(int8_t, int8_t);
 
@@ -469,41 +474,76 @@ void perform_action() {
 
         }
     } else {
+        // stores values for taken piece to restore if still in check
+        // initialise to -2 to recognise if something goes wrong and piece disappears
+        int8_t x_taken = -2, y_taken = -2;
+
         if (is_valid_move_position() && is_valid_move_piece()) {
             piece_at = get_piece_at_position(current_cursor_position.x, current_cursor_position.y);
 
+            // stores values and removes taken piece
             if (piece_at != NULL && piece_at->player != selected_piece->player) {
+                x_taken = piece_at->pos.x;
+                y_taken = piece_at->pos.y;
+
                 piece_at->pos.x = -2;
                 piece_at->pos.y = -2;
             }
 
+            // moves the piece to the desired position
             selected_piece->pos.x = current_cursor_position.x;
             selected_piece->pos.y = current_cursor_position.y;
 
-            int8_t i = 0;
-            for (i = 0; i < 32; i++) {
-                if (pieces[i].player != selected_piece->player && pieces[i].type == 'k' &&
-                    check_chess_position(&pieces[i], pieces[i].pos.x, pieces[i].pos.y)) {
-                    display_string_xy("chess", 240, 50);
-                }
-            }
+            piece *king = get_king(selected_piece->player);
 
-            turn = 1 - turn;
+            // if the king of the selected side is not in check switch turn
+            if(!check_chess_position(king->player, king->pos.x, king->pos.y)){
+                turn = 1 - turn;
+            } else {
+                // if there was a piece taken return to previous position
+                if (piece_at != NULL && piece_at->player != selected_piece->player) {
+                    piece_at->pos.x = x_taken;
+                    piece_at->pos.y = y_taken;
+                }
+
+                // return moved piece to previous position
+                selected_piece->pos.x = previous_selected_position.x;
+                selected_piece->pos.y = previous_selected_position.y;
+            }
         } else {
+            // invalid move, restore selected piece to previous position
             selected_piece->pos.x = previous_selected_position.x;
             selected_piece->pos.y = previous_selected_position.y;
         }
 
         draw_square(selected_piece->pos.x, selected_piece->pos.y);
 
+        // invalidates the selected piece and previous position
         selected_piece = NULL;
         previous_selected_position.x = -1;
         previous_selected_position.y = -1;
     }
 
-
     draw_square(current_cursor_position.x, current_cursor_position.y);
+    debug_king_chess();
+}
 
+void debug_king_chess(){
+    piece *white_king = get_king(0);
+    piece *black_king = get_king(1);
+
+
+    if(check_chess_position(white_king->player, white_king->pos.x, white_king->pos.y)){
+        display_string_xy("white chess  ", 240, 50);
+    } else {
+        display_string_xy("notwhitechess", 240, 50);
+    }
+
+    if(check_chess_position(black_king->player, black_king->pos.x, black_king->pos.y)){
+        display_string_xy("black chess  ", 240, 60);
+    } else {
+        display_string_xy("notblackchess", 240, 60);
+    }
 }
 
 piece *get_piece_at_position(int8_t x, int8_t y) {
@@ -518,97 +558,93 @@ piece *get_piece_at_position(int8_t x, int8_t y) {
     return NULL;
 }
 
-bool check_chess_position(piece *king, int8_t x, int8_t y) {
+//void check_chess_mate(bool player, int8_t x, int8_t y){
+//    if()
+//}
 
-    if (king == NULL) {
-        return false;
-    }
 
+bool check_chess_position(bool player, int8_t x, int8_t y) {
     // pawn
-    if (king->player == false && (check_pawn_chess(king, x - 1, y + 1) || check_pawn_chess(king, x + 1, y + 1))) {
+    if (player == false && (check_pawn_chess(player, x - 1, y + 1) || check_pawn_chess(player, x + 1, y + 1))) {
         return true;
-    } else if (king->player == true && (check_pawn_chess(king, x - 1, y - 1) || check_pawn_chess(king, x + 1, y - 1))) {
+    } else if (player == true && (check_pawn_chess(player, x - 1, y - 1) || check_pawn_chess(player, x + 1, y - 1))) {
         return true;
     }
 
     // rook && queen
-    if (check_line_chess(king, x, y, 0, -1)
-        || check_line_chess(king, x, y, 0, 1)
-        || check_line_chess(king, x, y, -1, 0)
-        || check_line_chess(king, x, y, 1, 0)) {
+    if (check_line_chess(player, x, y, 0, -1)
+        || check_line_chess(player, x, y, 0, 1)
+        || check_line_chess(player, x, y, -1, 0)
+        || check_line_chess(player, x, y, 1, 0)) {
         return true;
     }
 
     // horse
-    if (check_horse_chess(king, x - 1, y - 2)
-        || check_horse_chess(king, x - 1, y + 2)
-        || check_horse_chess(king, x - 2, y - 1)
-        || check_horse_chess(king, x - 2, y + 1)
-        || check_horse_chess(king, x + 1, y - 2)
-        || check_horse_chess(king, x + 1, y + 2)
-        || check_horse_chess(king, x + 2, y - 1)
-        || check_horse_chess(king, x + 2, y + 1)) {
+    if (check_horse_chess(player, x - 1, y - 2)
+        || check_horse_chess(player, x - 1, y + 2)
+        || check_horse_chess(player, x - 2, y - 1)
+        || check_horse_chess(player, x - 2, y + 1)
+        || check_horse_chess(player, x + 1, y - 2)
+        || check_horse_chess(player, x + 1, y + 2)
+        || check_horse_chess(player, x + 2, y - 1)
+        || check_horse_chess(player, x + 2, y + 1)) {
         return true;
     }
 
     // bishop && queen
-    if (check_line_chess(king, x, y, -1, -1)
-        || check_line_chess(king, x, y, -1, 1)
-        || check_line_chess(king, x, y, 1, -1)
-        || check_line_chess(king, x, y, 1, 1)) {
+    if (check_line_chess(player, x, y, -1, -1)
+        || check_line_chess(player, x, y, -1, 1)
+        || check_line_chess(player, x, y, 1, -1)
+        || check_line_chess(player, x, y, 1, 1)) {
         return true;
     }
 
     return false;
 }
 
-bool check_pawn_chess(piece *king, int8_t x, int8_t y) {
+bool check_pawn_chess(bool player, int8_t x, int8_t y) {
     piece *piece_at = get_piece_at_position(x, y);
-    if (piece_at != NULL && piece_at->player != king->player && piece_at->type == 'p') {
+    if (piece_at != NULL && piece_at->player != player && piece_at->type == 'p') {
         return true;
     }
 
     return false;
 }
 
-bool check_line_chess(piece *king, int8_t x, int8_t y, int8_t step_x, int8_t step_y) {
+bool check_line_chess(bool player, int8_t x, int8_t y, int8_t step_x, int8_t step_y) {
     piece *piece_at;
+
+    x += step_x;
+    y += step_y;
 
     while (x >= 0 && x < 8 && y >= 0 && y < 8) {
         piece_at = get_piece_at_position(x, y);
-
-        if (piece_at != NULL && piece_at->player != king->player && piece_at->type == 'q') {
-            return true;
-        } else if (piece_at != NULL && piece_at->type == 'r' && piece_at->player != king->player &&
-                   (step_x == 0 || step_y == 0)) {
-            return true;
-        } else if (piece_at != NULL && piece_at->type == 'b' && piece_at->player != king->player && step_x != 0 &&
-                   step_y != 0) {
-            return true;
-        } else if (piece_at != NULL &&
-                   (piece_at->player == king->player || (piece_at->type != 'r' && piece_at->type != 'b'))) {
+        if(piece_at != NULL && piece_at->player != player){
+            if(piece_at->type == 'q'){
+                return true;
+            } else if(piece_at->type == 'r' && (step_x == 0 || step_y == 0)){
+                return true;
+            } else if(piece_at->type == 'b' && step_x != 0 && step_y != 0){
+                return true;
+            }
+        } else if(piece_at != NULL){
             return false;
         }
 
-        x += step_x;
-        y += step_y;
+        x = x + step_x;
+        y = y + step_y;
     }
-
     return false;
 }
 
-bool check_horse_chess(piece *king, int8_t x, int8_t y) {
+bool check_horse_chess(bool player, int8_t x, int8_t y) {
     piece *piece_at = get_piece_at_position(x, y);
-    if (piece_at != NULL && piece_at->player != king->player && piece_at->type == 'h') {
+    if (piece_at != NULL && piece_at->player != player && piece_at->type == 'h') {
         return true;
     }
 
     return false;
 }
-
-// find a way to not allow the kings to go more than 2 pieces one to each other
-
-
 
 // check if the piece is allowed to go on that position from a movement's point of view
 bool is_valid_move_position() {
@@ -840,7 +876,7 @@ bool is_valid_move_piece() {
             piece_at = get_piece_at_position(x, y);
             if (piece_at != NULL && piece_at->player == selected_piece->player) {
                 return false;
-            } else if (check_chess_position(selected_piece, x, y)) {
+            } else if (check_chess_position(selected_piece->player, x, y)) {
                 return false;
             } else if (is_king_next_square(selected_piece->player, x - 1, y - 1)
                        || is_king_next_square(selected_piece->player, x, y - 1)
@@ -865,6 +901,16 @@ bool is_king_next_square(bool player, int8_t x, int8_t y) {
     return false;
 }
 
+piece* get_king(bool player){
+    int8_t i = 0;
+    for (i = 0; i < 32; i++) {
+        if (pieces[i].player == player && pieces[i].type == 'k') {
+            return &pieces[i];
+        }
+    }
+
+    return NULL;
+}
 
 /*
 *  Functions for handling the movement of a piece
