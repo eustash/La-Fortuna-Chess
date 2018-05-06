@@ -32,6 +32,7 @@ typedef struct {
     position pos;
     char type;
     bool player;
+    bool moved;
 } piece;
 
 // code from https://github.com/MKLOL/FortunaMultiplayer/blob/master/main.c
@@ -219,38 +220,38 @@ unsigned char hs[BOARD_SQUARE_SIZE][4] = {{255, 255, 255, 255},
 
 
 piece pieces[32] = {
-        {{0, 0}, 'r', 0},
-        {{1, 0}, 'h', 0},
-        {{2, 0}, 'b', 0},
-        {{3, 0}, 'q', 0},
-        {{4, 0}, 'k', 0},
-        {{5, 0}, 'b', 0},
-        {{6, 0}, 'h', 0},
-        {{7, 0}, 'r', 0},
-        {{0, 1}, 'p', 0},
-        {{1, 1}, 'p', 0},
-        {{2, 1}, 'p', 0},
-        {{3, 1}, 'p', 0},
-        {{4, 1}, 'p', 0},
-        {{5, 1}, 'p', 0},
-        {{6, 1}, 'p', 0},
-        {{7, 1}, 'p', 0},
-        {{0, 7}, 'r', 1},
-        {{1, 7}, 'h', 1},
-        {{2, 7}, 'b', 1},
-        {{3, 7}, 'q', 1},
-        {{4, 7}, 'k', 1},
-        {{5, 7}, 'b', 1},
-        {{6, 7}, 'h', 1},
-        {{7, 7}, 'r', 1},
-        {{0, 6}, 'p', 1},
-        {{1, 6}, 'p', 1},
-        {{2, 6}, 'p', 1},
-        {{3, 6}, 'p', 1},
-        {{4, 6}, 'p', 1},
-        {{5, 6}, 'p', 1},
-        {{6, 6}, 'p', 1},
-        {{7, 6}, 'p', 1}
+        {{0, 0}, 'r', 0, 0},
+        {{1, 0}, 'h', 0, 0},
+        {{2, 0}, 'b', 0, 0},
+        {{3, 0}, 'q', 0, 0},
+        {{4, 0}, 'k', 0, 0},
+        {{5, 0}, 'b', 0, 0},
+        {{6, 0}, 'h', 0, 0},
+        {{7, 0}, 'r', 0, 0},
+        {{0, 1}, 'p', 0, 0},
+        {{1, 1}, 'p', 0, 0},
+        {{2, 1}, 'p', 0, 0},
+        {{3, 1}, 'p', 0, 0},
+        {{4, 1}, 'p', 0, 0},
+        {{5, 1}, 'p', 0, 0},
+        {{6, 1}, 'p', 0, 0},
+        {{7, 1}, 'p', 0, 0},
+        {{0, 7}, 'r', 1, 0},
+        {{1, 7}, 'h', 1, 0},
+        {{2, 7}, 'b', 1, 0},
+        {{3, 7}, 'q', 1, 0},
+        {{4, 7}, 'k', 1, 0},
+        {{5, 7}, 'b', 1, 0},
+        {{6, 7}, 'h', 1, 0},
+        {{7, 7}, 'r', 1, 0},
+        {{0, 6}, 'p', 1, 0},
+        {{1, 6}, 'p', 1, 0},
+        {{2, 6}, 'p', 1, 0},
+        {{3, 6}, 'p', 1, 0},
+        {{4, 6}, 'p', 1, 0},
+        {{5, 6}, 'p', 1, 0},
+        {{6, 6}, 'p', 1, 0},
+        {{7, 6}, 'p', 1, 0}
 };
 
 
@@ -498,6 +499,11 @@ void perform_action() {
 
             // if the king of the selected side is not in check switch turn
             if(!check_chess_position(king->player, king->pos.x, king->pos.y)){
+
+                if(selected_piece->moved == 0){
+                    selected_piece->moved = 1;
+                }
+
                 turn = 1 - turn;
             } else {
                 // if there was a piece taken return to previous position
@@ -660,6 +666,16 @@ bool is_valid_move_position() {
                         return true;
                     }
                 }
+                if(selected_piece->moved == 0 && previous_selected_position.x == current_cursor_position.x){
+                    if (selected_piece->player == 0
+                        && previous_selected_position.y == (current_cursor_position.y - 2)) {
+                        return true;
+                    } else if (selected_piece->player == 1
+                               && previous_selected_position.y == (current_cursor_position.y + 2)) {
+                        return true;
+                    }
+                }
+
                 break;
             case 'r':
                 if (!(previous_selected_position.x != current_cursor_position.x
@@ -721,6 +737,29 @@ bool is_valid_move_piece() {
                 piece_at = get_piece_at_position(x, y);
                 if (piece_at == NULL || piece_at->player == selected_piece->player || piece_at->type == 'k') {
                     return false;
+                }
+            }
+            if(abs(previous_selected_position.y - current_cursor_position.y) == 2){
+                if (selected_piece->player == 0) {
+                    piece_at = get_piece_at_position(previous_selected_position.x, previous_selected_position.y + 1);
+                    if(piece_at != NULL){
+                        return false;
+                    }
+
+                    piece_at = get_piece_at_position(previous_selected_position.x, previous_selected_position.y + 2);
+                    if(piece_at != NULL){
+                        return false;
+                    }
+                } else if (selected_piece->player == 1) {
+                    piece_at = get_piece_at_position(previous_selected_position.x, previous_selected_position.y - 1);
+                    if(piece_at != NULL){
+                        return false;
+                    }
+
+                    piece_at = get_piece_at_position(previous_selected_position.x, previous_selected_position.y - 2);
+                    if(piece_at != NULL){
+                        return false;
+                    }
                 }
             }
             break;
