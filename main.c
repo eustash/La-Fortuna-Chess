@@ -287,6 +287,12 @@ bool is_valid_move_piece(void);
 
 bool is_king_next_square(bool player, int8_t x, int8_t y);
 
+bool is_pawn_at_end(piece *);
+
+void draw_piece_replace();
+
+void clear_piece_replace();
+
 piece* get_king(bool player);
 
 void move_cursor(int8_t, int8_t);
@@ -296,7 +302,10 @@ int check_switches(int);
 // false is white and true is black
 bool turn = false;
 
+bool debug_enabled = false;
+
 piece *selected_piece = NULL;
+piece *pawn_replaced = NULL;
 position previous_selected_position = {-1, -1};
 position current_cursor_position = {0, 0};
 
@@ -366,37 +375,51 @@ void draw_square(int8_t x, int8_t y) {
     piece *piece_at = get_piece_at_position(x, y);
 
     if (piece_at != NULL) {
-        display_string_xy("drawing", 240, 10);
+        if(debug_enabled){
+            display_string_xy("drawing", 240, 10);
+        }
         draw_piece_at_position(piece_at);
-    } else {
+    } else if(debug_enabled){
         display_string_xy("not    ", 240, 10);
     }
 
     // selected piece position debug
     char debug[256];
     sprintf(debug, "spp: %d %d  ", selected_piece->pos.x, selected_piece->pos.y);
-    display_string_xy(debug, 240, 0);
+    if(debug_enabled){
+        display_string_xy(debug, 240, 0);
+    }
 
 
     // cursor position debug
     sprintf(debug, "cp: %d %d  ", current_cursor_position.x, current_cursor_position.y);
-    display_string_xy(debug, 240, 20);
+    if(debug_enabled){
+        display_string_xy(debug, 240, 20);
+    }
 
     // previous selected piece position debug
     sprintf(debug, "pspp: %d %d  ", previous_selected_position.x, previous_selected_position.y);
-    display_string_xy(debug, 240, 30);
+    if(debug_enabled){
+        display_string_xy(debug, 240, 30);
+    }
 
     if (turn) {
-        display_string_xy("turn: black", 240, 40);
+        if(debug_enabled){
+            display_string_xy("turn: black", 240, 40);
+        }
     } else {
-        display_string_xy("turn: white", 240, 40);
+        if(debug_enabled){
+            display_string_xy("turn: white", 240, 40);
+        }
     }
 
     // position of all pieces debug
 /*    int i = 0;
     for (i = 0; i < 16; i++) {
         sprintf(debug, "%d: %d %d  ", i, pieces[i].pos.x, pieces[i].pos.y);
-        display_string_xy(debug, 240, i * 10 + 50);
+        if(debug_enabled){
+            display_string_xy(debug, 240, i * 10 + 50);
+        }
     }*/
 }
 
@@ -427,7 +450,6 @@ void draw_piece(int8_t x, int8_t y, unsigned char vx[BOARD_SQUARE_SIZE][4], bool
             }
         }
     }
-
 }
 
 void draw_piece_at_position(piece *piece) {
@@ -522,6 +544,11 @@ void perform_action() {
             selected_piece->pos.y = previous_selected_position.y;
         }
 
+        if(is_pawn_at_end(selected_piece)){
+            pawn_replaced = selected_piece;
+            draw_piece_replace();
+        }
+
         draw_square(selected_piece->pos.x, selected_piece->pos.y);
 
         // invalidates the selected piece and previous position
@@ -539,15 +566,16 @@ void debug_king_chess(){
     piece *black_king = get_king(1);
 
 
-    if(check_chess_position(white_king->player, white_king->pos.x, white_king->pos.y)){
+    if(check_chess_position(white_king->player, white_king->pos.x, white_king->pos.y) && debug_enabled){
+
         display_string_xy("white chess  ", 240, 50);
-    } else {
+    } else if(debug_enabled){
         display_string_xy("notwhitechess", 240, 50);
     }
 
-    if(check_chess_position(black_king->player, black_king->pos.x, black_king->pos.y)){
+    if(check_chess_position(black_king->player, black_king->pos.x, black_king->pos.y) && debug_enabled){
         display_string_xy("black chess  ", 240, 60);
-    } else {
+    } else if(debug_enabled){
         display_string_xy("notblackchess", 240, 60);
     }
 }
@@ -563,10 +591,6 @@ piece *get_piece_at_position(int8_t x, int8_t y) {
 
     return NULL;
 }
-
-//void check_chess_mate(bool player, int8_t x, int8_t y){
-//    if()
-//}
 
 
 bool check_chess_position(bool player, int8_t x, int8_t y) {
@@ -940,6 +964,30 @@ bool is_king_next_square(bool player, int8_t x, int8_t y) {
     return false;
 }
 
+bool is_pawn_at_end(piece *moved_piece){
+    if(moved_piece->type == 'p' && moved_piece->player == false && moved_piece->pos.y == 7){
+        return true;
+    } else if(moved_piece->type == 'p' && moved_piece->player == true && moved_piece->pos.y == 0){
+        return true;
+    }
+
+    return false;
+}
+
+void draw_piece_replace(){
+    draw_piece(9, 4, qu, false);
+    draw_piece(8, 5, bs, false);
+    draw_piece(10, 5, hs, false);
+    draw_piece(9, 6, rk, false);
+}
+
+void clear_piece_replace(){
+    draw_piece(9, 4, qu, true);
+    draw_piece(8, 5, bs, true);
+    draw_piece(10, 5, hs, true);
+    draw_piece(9, 6, rk, true);
+}
+
 piece* get_king(bool player){
     int8_t i = 0;
     for (i = 0; i < 32; i++) {
@@ -982,23 +1030,53 @@ void move_cursor(int8_t x, int8_t y) {
 int check_switches(int state) {
 
     if (get_switch_press(_BV(SWN))) {
-        move_cursor(0, -1);
+        if(pawn_replaced != NULL){
+            pawn_replaced->type = 'q';
+            clear_piece_replace();
+            draw_square(pawn_replaced->pos.x, pawn_replaced->pos.y);
+            pawn_replaced = NULL;
+        } else {
+            move_cursor(0, -1);
+        }
     }
 
     if (get_switch_press(_BV(SWE))) {
-        move_cursor(1, 0);
+        if(pawn_replaced != NULL){
+            pawn_replaced->type = 'b';
+            clear_piece_replace();
+            draw_square(pawn_replaced->pos.x, pawn_replaced->pos.y);
+            pawn_replaced = NULL;
+        } else {
+            move_cursor(1, 0);
+        }
     }
 
     if (get_switch_press(_BV(SWS))) {
-        move_cursor(0, 1);
+        if(pawn_replaced != NULL){
+            pawn_replaced->type = 'r';
+            clear_piece_replace();
+            draw_square(pawn_replaced->pos.x, pawn_replaced->pos.y);
+            pawn_replaced = NULL;
+        } else {
+            move_cursor(0, 1);
+        }
     }
 
     if (get_switch_press(_BV(SWW))) {
-        move_cursor(-1, 0);
+        if(pawn_replaced != NULL){
+            pawn_replaced->type = 'h';
+            clear_piece_replace();
+            draw_square(pawn_replaced->pos.x, pawn_replaced->pos.y);
+            pawn_replaced = NULL;
+        } else {
+            move_cursor(-1, 0);
+        }
     }
 
     if (get_switch_press(_BV(SWC))) {
-        perform_action();
+        if(pawn_replaced == NULL){
+            perform_action();
+        }
     }
 
     return state;
