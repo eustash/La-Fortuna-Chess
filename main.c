@@ -1,12 +1,9 @@
-/* COMP2215 Task 7*/
-
 #include <stdlib.h>
 #include <stdio.h>
 #include "lcd.h"
 #include "ruota.h"
 #include "rios.h"
 #include <avr/interrupt.h>
-// #include "main.h"
 
 #define LCD_WIDTH    320
 #define LCD_HEIGHT    240
