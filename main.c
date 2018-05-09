@@ -566,17 +566,16 @@ void debug_king_chess(){
     piece *black_king = get_king(1);
 
 
-    if(check_chess_position(white_king->player, white_king->pos.x, white_king->pos.y) && debug_enabled){
-
-        display_string_xy("white chess  ", 240, 50);
-    } else if(debug_enabled){
-        display_string_xy("notwhitechess", 240, 50);
+    if(check_chess_position(white_king->player, white_king->pos.x, white_king->pos.y)){
+        display_string_xy("white chess", 240, 0);
+    } else {
+        display_string_xy("           ", 240, 0);
     }
 
-    if(check_chess_position(black_king->player, black_king->pos.x, black_king->pos.y) && debug_enabled){
-        display_string_xy("black chess  ", 240, 60);
-    } else if(debug_enabled){
-        display_string_xy("notblackchess", 240, 60);
+    if(check_chess_position(black_king->player, black_king->pos.x, black_king->pos.y)){
+        display_string_xy("black chess", 240, 10);
+    } else {
+        display_string_xy("           ", 240, 10);
     }
 }
 
